@@ -13,7 +13,8 @@
     "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,json,md}\"",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "prepare": "husky install || true"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.2.0",
@@ -31,6 +32,7 @@
     "expo-file-system": "~19.0.21",
     "expo-haptics": "~15.0.8",
     "expo-linear-gradient": "~15.0.8",
+    "expo-local-authentication": "~15.0.10",
     "expo-notifications": "~0.32.15",
     "expo-sharing": "~14.0.8",
     "expo-status-bar": "~3.0.9",
