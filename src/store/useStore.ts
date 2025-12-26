@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Transaction, Category, Budget, UserSettings } from '../types';
+import { Transaction, Category, Budget, UserSettings, SavingsGoal, RecurringTransaction } from '../types';
 import { ALL_CATEGORIES } from '../constants/categories';
 import {
   syncTransaction,
@@ -22,6 +22,8 @@ interface AppState {
   categories: Category[];
   budgets: Budget[];
   settings: UserSettings;
+  savingsGoals: SavingsGoal[];
+  recurringTransactions: RecurringTransaction[];
   userId: string | null;
   isOnline: boolean;
   isSyncing: boolean;
@@ -39,6 +41,14 @@ interface AppState {
   setBudget: (budget: Budget) => void;
   updateBudget: (id: string, budget: Partial<Budget>) => void;
 
+  addSavingsGoal: (goal: Omit<SavingsGoal, 'id' | 'createdAt'>) => void;
+  updateSavingsGoal: (id: string, goal: Partial<SavingsGoal>) => void;
+  deleteSavingsGoal: (id: string) => void;
+
+  addRecurringTransaction: (transaction: Omit<RecurringTransaction, 'id' | 'createdAt'>) => void;
+  updateRecurringTransaction: (id: string, transaction: Partial<RecurringTransaction>) => void;
+  deleteRecurringTransaction: (id: string) => void;
+
   updateSettings: (settings: Partial<UserSettings>) => void;
 
   loadData: () => Promise<void>;
@@ -52,6 +62,8 @@ const STORAGE_KEYS = {
   CATEGORIES: '@finance_tracker_categories',
   BUDGETS: '@finance_tracker_budgets',
   SETTINGS: '@finance_tracker_settings',
+  SAVINGS_GOALS: '@finance_tracker_savings_goals',
+  RECURRING_TRANSACTIONS: '@finance_tracker_recurring_transactions',
 };
 
 export const useStore = create<AppState>((set, get) => ({
@@ -66,6 +78,8 @@ export const useStore = create<AppState>((set, get) => ({
     notifications: true,
     language: 'en',
   },
+  savingsGoals: [],
+  recurringTransactions: [],
   userId: null,
   isOnline: true,
   isSyncing: false,
@@ -306,20 +320,90 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
+  // Savings Goals Actions
+  addSavingsGoal: async (goalData) => {
+    const newGoal: SavingsGoal = {
+      ...goalData,
+      id: `goal_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      createdAt: new Date(),
+    };
+
+    set((state) => ({
+      savingsGoals: [...state.savingsGoals, newGoal],
+    }));
+
+    get().saveData();
+  },
+
+  updateSavingsGoal: async (id, updates) => {
+    set((state) => ({
+      savingsGoals: state.savingsGoals.map((goal) =>
+        goal.id === id ? { ...goal, ...updates } : goal
+      ),
+    }));
+
+    get().saveData();
+  },
+
+  deleteSavingsGoal: async (id) => {
+    set((state) => ({
+      savingsGoals: state.savingsGoals.filter((goal) => goal.id !== id),
+    }));
+
+    get().saveData();
+  },
+
+  // Recurring Transactions Actions
+  addRecurringTransaction: async (transactionData) => {
+    const newRecurring: RecurringTransaction = {
+      ...transactionData,
+      id: `rec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      createdAt: new Date(),
+    };
+
+    set((state) => ({
+      recurringTransactions: [...state.recurringTransactions, newRecurring],
+    }));
+
+    get().saveData();
+  },
+
+  updateRecurringTransaction: async (id, updates) => {
+    set((state) => ({
+      recurringTransactions: state.recurringTransactions.map((txn) =>
+        txn.id === id ? { ...txn, ...updates } : txn
+      ),
+    }));
+
+    get().saveData();
+  },
+
+  deleteRecurringTransaction: async (id) => {
+    set((state) => ({
+      recurringTransactions: state.recurringTransactions.filter((txn) => txn.id !== id),
+    }));
+
+    get().saveData();
+  },
+
   // Storage Actions
   loadData: async () => {
     try {
-      const [transactionsData, categoriesData, budgetsData, settingsData] = await Promise.all([
+      const [transactionsData, categoriesData, budgetsData, settingsData, savingsGoalsData, recurringData] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.TRANSACTIONS),
         AsyncStorage.getItem(STORAGE_KEYS.CATEGORIES),
         AsyncStorage.getItem(STORAGE_KEYS.BUDGETS),
         AsyncStorage.getItem(STORAGE_KEYS.SETTINGS),
+        AsyncStorage.getItem(STORAGE_KEYS.SAVINGS_GOALS),
+        AsyncStorage.getItem(STORAGE_KEYS.RECURRING_TRANSACTIONS),
       ]);
 
       const parsedTransactions = transactionsData ? JSON.parse(transactionsData) : [];
       const parsedCategories = categoriesData ? JSON.parse(categoriesData) : ALL_CATEGORIES;
       const parsedBudgets = budgetsData ? JSON.parse(budgetsData) : [];
       const parsedSettings = settingsData ? JSON.parse(settingsData) : get().settings;
+      const parsedSavingsGoals = savingsGoalsData ? JSON.parse(savingsGoalsData) : [];
+      const parsedRecurring = recurringData ? JSON.parse(recurringData) : [];
 
       // Convert date strings back to Date objects
       const transactionsWithDates = parsedTransactions.map((txn: any) => ({
@@ -329,11 +413,27 @@ export const useStore = create<AppState>((set, get) => ({
         updatedAt: new Date(txn.updatedAt),
       }));
 
+      const savingsGoalsWithDates = parsedSavingsGoals.map((goal: any) => ({
+        ...goal,
+        createdAt: new Date(goal.createdAt),
+        deadline: goal.deadline ? new Date(goal.deadline) : undefined,
+      }));
+
+      const recurringWithDates = parsedRecurring.map((txn: any) => ({
+        ...txn,
+        startDate: new Date(txn.startDate),
+        endDate: txn.endDate ? new Date(txn.endDate) : undefined,
+        lastProcessed: txn.lastProcessed ? new Date(txn.lastProcessed) : undefined,
+        createdAt: new Date(txn.createdAt),
+      }));
+
       set({
         transactions: transactionsWithDates,
         categories: parsedCategories,
         budgets: parsedBudgets,
         settings: parsedSettings,
+        savingsGoals: savingsGoalsWithDates,
+        recurringTransactions: recurringWithDates,
       });
     } catch (error) {
       console.error('Error loading data from local storage:', error);
@@ -348,6 +448,8 @@ export const useStore = create<AppState>((set, get) => ({
         AsyncStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(state.categories)),
         AsyncStorage.setItem(STORAGE_KEYS.BUDGETS, JSON.stringify(state.budgets)),
         AsyncStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(state.settings)),
+        AsyncStorage.setItem(STORAGE_KEYS.SAVINGS_GOALS, JSON.stringify(state.savingsGoals)),
+        AsyncStorage.setItem(STORAGE_KEYS.RECURRING_TRANSACTIONS, JSON.stringify(state.recurringTransactions)),
       ]);
     } catch (error) {
       console.error('Error saving data to local storage:', error);
